@@ -1,33 +1,64 @@
-'use strict';
+import winston from 'winston';
 
-const winston = require('winston');
+import user from '../user';
+import notifications from '../notifications';
+import sockets from '../socket.io';
+import plugins from '../plugins';
+import meta from '../meta';
 
-const user = require('../user');
-const notifications = require('../notifications');
-const sockets = require('../socket.io');
-const plugins = require('../plugins');
-const meta = require('../meta');
+interface MessageData {
+    self?: number;
+    roomId: string;
+    fromUid: string;
+    message: MessageType;
+    uids: string[];
+}
 
-module.exports = function (Messaging) {
+interface QueueObject {
+    message: MessageType;
+    timeout?: NodeJS.Timeout | string | number;
+}
+
+interface User {
+    displayname: string;
+}
+
+interface MessageType {
+    content: string;
+    fromUser: User;
+    roomId: string;
+    system: boolean;
+}
+
+interface MessagingType {
+    notifyQueue: { [index: string] : QueueObject };
+    getUidsInRoom: (roomId: string, start: number, stop: number) => Promise<string[]>;
+    notifyUsersInRoom: (fromUid: string, roomId: string, messageObj: MessageType) => Promise<void>;
+    pushUnreadCount: (uid: string) => Promise<void>;
+    isGroupChat: (roomId: string) => Promise<boolean>;
+}
+
+export = function (Messaging: MessagingType) {
     Messaging.notifyQueue = {}; // Only used to notify a user of a new chat message, see Messaging.notifyUser
 
-    Messaging.notifyUsersInRoom = async (fromUid, roomId, messageObj) => {
+    Messaging.notifyUsersInRoom = async (fromUid: string, roomId: string, messageObj: MessageType) => {
         let uids = await Messaging.getUidsInRoom(roomId, 0, -1);
         uids = await user.blocks.filterUids(fromUid, uids);
 
-        let data = {
+        let data: MessageData = {
             roomId: roomId,
             fromUid: fromUid,
             message: messageObj,
             uids: uids,
         };
+        
         data = await plugins.hooks.fire('filter:messaging.notify', data);
         if (!data || !data.uids || !data.uids.length) {
             return;
         }
 
         uids = data.uids;
-        uids.forEach((uid) => {
+        uids.forEach((uid: string) => {
             data.self = parseInt(uid, 10) === parseInt(fromUid, 10) ? 1 : 0;
             Messaging.pushUnreadCount(uid);
             sockets.in(`uid_${uid}`).emit('event:chats.receive', data);
@@ -36,7 +67,7 @@ module.exports = function (Messaging) {
             return;
         }
         // Delayed notifications
-        let queueObj = Messaging.notifyQueue[`${fromUid}:${roomId}`];
+        let queueObj: QueueObject = Messaging.notifyQueue[`${fromUid}:${roomId}`];
         if (queueObj) {
             queueObj.message.content += `\n${messageObj.content}`;
             clearTimeout(queueObj.timeout);
@@ -56,7 +87,7 @@ module.exports = function (Messaging) {
         }, meta.config.notificationSendDelay * 1000);
     };
 
-    async function sendNotifications(fromuid, uids, roomId, messageObj) {
+    async function sendNotifications(fromuid: string, uids: string[], roomId: string, messageObj: MessageType): Promise<void> {
         const isOnline = await user.isOnline(uids);
         uids = uids.filter((uid, index) => !isOnline[index] && parseInt(fromuid, 10) !== parseInt(uid, 10));
         if (!uids.length) {
