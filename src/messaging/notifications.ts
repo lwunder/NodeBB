@@ -16,6 +16,16 @@ interface MessageData {
     uids: string[];
 }
 
+interface NotificationObject {
+    type: string;
+    subject: string;
+    bodyShort: string;
+    bodyLong: string,
+    nid: string;
+    from: string;
+    path: string;
+}
+
 interface QueueObject {
     message: MessageObject;
     timeout?: NodeJS.Timeout | string | number;
@@ -48,7 +58,7 @@ export = function (Messaging: MessagingType) {
 
         // The next line calls a function in a module that has not been updated to TS yet
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-        const notification = await notifications.create({
+        const notification: NotificationObject = await notifications.create({
             type: isGroupChat ? 'new-group-chat' : 'new-chat',
             subject: `[[email:notif.chat.subject, ${displayname}]]`,
             bodyShort: `[[notifications:new_message_from, ${displayname}]]`,
@@ -56,7 +66,7 @@ export = function (Messaging: MessagingType) {
             nid: `chat_${fromuid}_${roomId}`,
             from: fromuid,
             path: `/chats/${messageObj.roomId}`,
-        });
+        }) as NotificationObject;
 
         delete Messaging.notifyQueue[`${fromuid}:${roomId}`];
         await notifications.push(notification, uids);
@@ -110,10 +120,10 @@ export = function (Messaging: MessagingType) {
         queueObj.timeout = setTimeout(async () => {
             try {
                 await sendNotifications(fromUid, uids, roomId, queueObj.message);
-            } catch (err) {
-                // The next line calls a function in a module that has not been updated to TS yet
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-                winston.error(`[messaging/notifications] Unabled to send notification\n${err.stack}`);
+            } catch (err: unknown) {
+                if (err instanceof Error) {
+                    winston.error(`[messaging/notifications] Unabled to send notification\n${err.stack}`);
+                }
             }
         // The next line calls a function in a module that has not been updated to TS yet
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call

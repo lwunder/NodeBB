@@ -65,7 +65,8 @@ module.exports = function (Messaging) {
         uids = data.uids;
         uids.forEach((uid) => {
             data.self = parseInt(uid, 10) === parseInt(fromUid, 10) ? 1 : 0;
-            Messaging.pushUnreadCount(uid);
+            Messaging.pushUnreadCount(uid).then(() => { }).catch((err) => { throw err; });
+            ;
             // The next line calls a function in a module that has not been updated to TS yet
             // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
             socket_io_1.default.in(`uid_${uid}`).emit('event:chats.receive', data);
@@ -90,9 +91,9 @@ module.exports = function (Messaging) {
                 yield sendNotifications(fromUid, uids, roomId, queueObj.message);
             }
             catch (err) {
-                // The next line calls a function in a module that has not been updated to TS yet
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-                winston_1.default.error(`[messaging/notifications] Unabled to send notification\n${err.stack}`);
+                if (err instanceof Error) {
+                    winston_1.default.error(`[messaging/notifications] Unabled to send notification\n${err.stack}`);
+                }
             }
             // The next line calls a function in a module that has not been updated to TS yet
             // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
